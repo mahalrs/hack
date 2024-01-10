@@ -1,0 +1,14 @@
+apiVersion: networking.gke.io/v1
+kind: GCPBackendPolicy
+metadata:
+  labels:
+    app: webapp
+  name: webapp
+  namespace: webapp
+spec:
+  default:
+    securityPolicy: cloudflare-ingress-only-backend-policy
+  targetRef:
+    group: ""
+    kind: Service
+    name: webapp

@@ -1,0 +1,72 @@
+# This workflow build and push a docker container to Google Artifact Registry
+# and deploy it to GKE when a commit is pushed to the "main" branch.
+#
+# Overview:
+#
+# 1. Authenticate to Google Cloud
+# 2. Authenticate Docker to Artifact Registry
+# 3. Set up GKE credentials
+# 4. Build a docker container
+# 5. Publish it to Google Artifact Registry
+# 6. Deploy it to GKE using Helm
+
+name: Build and Deploy to GKE
+
+on:
+  push:
+    branches: ["main"]
+
+env:
+  PROJECT_ID: "" # TODO: Set your project ID
+  GAR_LOCATION: "" # TODO: Set your Artifact Registry location
+  GKE_CLUSTER: "" # TODO: Set your GKE cluster name
+  GKE_LOCATION: "" # TODO: Set your GKE cluster location
+  HELM_RELEASE: "" # TODO: Set your Helm release name
+  HELM_CHART: "" # TODO: Set your Helm chart name
+  HELM_CHART_VERSION: 0.1.0 # TODO: Set your Helm chart version
+  REPOSITORY: "" # TODO: Set your Artifact Registry repository
+  IMAGE: "" # TODO: Set your docker image name
+
+jobs:
+  deploy:
+    permissions:
+      contents: "read"
+      id-token: "write"
+
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Google Auth
+        id: auth
+        uses: "google-github-actions/auth@v0"
+        with:
+          token_format: "access_token"
+          # https://github.com/google-github-actions/auth#setting-up-workload-identity-federation
+          workload_identity_provider: "${{ secrets.WIF_PROVIDER }}" # e.g. - "projects/123456789/locations/global/workloadIdentityPools/my-pool/providers/my-provider"
+          service_account: "${{ secrets.WIF_SERVICE_ACCOUNT }}" # e.g. - "my-service-account@my-project.iam.gserviceaccount.com"
+
+      - name: Docker Auth
+        id: docker-auth
+        uses: "docker/login-action@v1"
+        with:
+          username: "oauth2accesstoken"
+          password: "${{ steps.auth.outputs.access_token }}"
+          registry: "${{ env.GAR_LOCATION }}-docker.pkg.dev"
+
+      - name: Set up GKE credentials
+        id: gke-credentials
+        uses: google-github-actions/get-gke-credentials@v0
+        with:
+          cluster_name: ${{ env.GKE_CLUSTER }}
+          location: ${{ env.GKE_LOCATION }}
+
+      - name: Build and Push Container
+        run: |-
+          docker build -t "${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}:${{ github.sha }}" ./
+          docker push "${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}:${{ github.sha }}"
+
+      - name: Deploy to GKE
+        run: |-
+          helm upgrade --install ${{ env.HELM_RELEASE }} "oci://${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.HELM_CHART }}" --version ${{ env.HELM_CHART_VERSION }} --set image.repository="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}" --set image.tag=${{ github.sha }}

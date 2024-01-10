@@ -1,0 +1,23 @@
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: Gateway
+metadata:
+  labels:
+    app: infra
+  name: external-http-gateway
+  namespace: infra
+  annotations:
+    networking.gke.io/certmap: cloudflare-origin-ca-cert-map
+spec:
+  gatewayClassName: gke-l7-global-external-managed
+  listeners:
+    - name: https
+      protocol: HTTPS
+      port: 443
+      allowedRoutes:
+        kinds:
+          - kind: HTTPRoute
+        namespaces:
+          from: All
+  addresses:
+    - type: NamedAddress
+      value: external-http-gateway-ip

@@ -1,0 +1,16 @@
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: HTTPRoute
+metadata:
+  labels:
+    app: webapp
+  name: webapp
+  namespace: webapp
+spec:
+  parentRefs:
+    - kind: Gateway
+      name: external-http-gateway
+      namespace: infra
+  rules:
+    - backendRefs:
+        - name: webapp
+          port: 8080

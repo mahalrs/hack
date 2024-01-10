@@ -1,0 +1,5 @@
+# Default values for the helm chart.
+
+image:
+  repository: ""
+  tag: ""
